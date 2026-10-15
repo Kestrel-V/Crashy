@@ -1,0 +1,77 @@
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Build directories
+build/
+cmake-build-*/
+Debug/
+Release/
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+compile_commands.json
+CMakeLists.txt.user*
+
+# VS Code - allow shared configurations
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+
+# Compiler dependency files
+*.d
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Compiled object files
+*.o
+*.obj
+*.slo
+*.lo
+
+# Linker files
+*.ilk
+*.map
+*.exp
+
+# Debug files
+*.dSYM/
+*.pdb
+*.su
+*.idb
+*.ipdb
+*.dwo
+
+# Executable and firmware outputs
+*.exe
+*.elf
+*.hex
+*.app
+*.out
+
+# Python files
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# STM32CubeIDE files
+.metadata/
+
+# Clangd cache
+.clangd/
+.cache/clangd/
