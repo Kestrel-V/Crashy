@@ -18,7 +18,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Cache ARM GNU Toolchain
+        id: arm-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/arm-toolchain
+          key: arm-gnu-14.2.rel1-linux-x64-v1
+
       - name: Install ARM GNU Toolchain 14.2.Rel1
+        if: steps.arm-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +42,8 @@ jobs:
           mkdir -p "$TOOLCHAIN"
           tar -xf "$ARCHIVE" -C "$TOOLCHAIN" --strip-components=1
 
-          echo "$TOOLCHAIN/bin" >> "$GITHUB_PATH"
+      - name: Add ARM toolchain to PATH
+        run: echo "$RUNNER_TEMP/arm-toolchain/bin" >> "$GITHUB_PATH"
 
       - name: Verify build tools
         run: |
