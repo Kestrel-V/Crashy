@@ -1,24 +1,48 @@
 # Crashy Development Guide
 
-This guide covers building the **STM32H755ZIT6 dual-core firmware** on a development machine. Run all commands from the **Crashy repository root**.
+This guide covers setting up the development environment and building the **STM32H755ZIT6 dual-core firmware**.
 
-## Requirements
+The supported development environment is **Ubuntu Linux with Visual Studio Code**. Run all terminal commands from the **Crashy repository root**, unless otherwise specified.
 
-- CMake **3.22 or newer**
-- Ninja
-- Arm GNU Toolchain (`arm-none-eabi-gcc`)
+## 1. Requirements
 
-Verify that the tools are available:
+### Build tools
+
+| Tool | Minimum / requirement | Tested version |
+|---|---|---|
+| CMake | 3.22 or newer | 4.2.3 |
+| Ninja | Required | 1.13.2 |
+| ARM GNU Toolchain | `arm-none-eabi-gcc` | 14.2.1 |
+| Python | Python 3 | System installation |
+
+Verify that the required tools are available:
 
 ```bash
 cmake --version
 ninja --version
 arm-none-eabi-gcc --version
+python3 --version
 ```
 
-> STM32CubeMX is needed when changing and regenerating the MCU configuration, **not** for an ordinary firmware build. The generated HAL/CMSIS code is kept in the repository.
+All tools must be accessible through the system `PATH`.
 
-## Build firmware
+### Development tools
+
+| Tool | Purpose | Tested version |
+|---|---|---|
+| VS Code | Code editor | — |
+| clangd | Code intelligence | 21.1.8 |
+| clang-format | Source formatting | 21.1.8 |
+| GDB Multiarch | Firmware debugging | 17.1 |
+| OpenOCD | Hardware debug server | 0.12.0 |
+
+GDB and OpenOCD are needed for hardware debugging, not ordinary compilation.
+
+These are the versions tested during initial development; exact version matching is not necessarily required.
+
+**STM32CubeMX** is needed when changing and regenerating the MCU configuration, not for an ordinary firmware build. The generated HAL/CMSIS sources are included in the repository.
+
+## 2. Build Firmware
 
 ### Debug
 
@@ -34,9 +58,13 @@ cmake --preset Release
 cmake --build --preset Release
 ```
 
-The first command configures the selected build; the second compiles and links **both cores**. Re-run the build command after changing source files. Re-run the configure command if you change CMake configuration.
+The first command configures the selected build; the second compiles and links **both cores**.
 
-## Build outputs
+Re-run the build command after changing source files. Re-run configuration after changing CMake configuration.
+
+CMake uses Ninja for incremental builds, so unchanged files are not unnecessarily recompiled.
+
+### Build outputs
 
 The root-level CMake build stores outputs under the Git-ignored `build/` directory:
 
@@ -55,7 +83,7 @@ Crashy/
             └── cubemx_CM4.elf
 ```
 
-These paths show the ELF files; each core's directory also contains generated CMake/Ninja and object files.
+Each core's directory also contains generated CMake/Ninja files, object files, and a `compile_commands.json` compilation database.
 
 Find all firmware ELF files:
 
@@ -63,13 +91,166 @@ Find all firmware ELF files:
 find build/ -name '*.elf'
 ```
 
-- **CM7**: Cortex-M7 firmware (planned flight-control application)
-- **CM4**: Cortex-M4 firmware (planned supporting services)
-- **`.elf`**: Linked firmware executable containing symbols useful for debugging
+- **CM7:** Cortex-M7 firmware, intended for flight-critical functionality.
+- **CM4:** Cortex-M4 firmware, intended for supporting services.
+- **ELF:** Linked firmware executable containing symbols useful for debugging.
 
-The current build verifies compilation and linking. **It does not prove that the firmware runs correctly on hardware.**
+Successful compilation and linking do not guarantee correct operation on physical hardware.
 
-## Clean / rebuild
+## 3. VS Code Setup
+
+Open the repository root:
+
+```bash
+code .
+```
+
+### Recommended extensions
+
+VS Code reads the repository's `.vscode/extensions.json` and recommends:
+
+- **CMake Tools** — `ms-vscode.cmake-tools`
+- **clangd** — `llvm-vs-code-extensions.vscode-clangd`
+- **Cortex-Debug** — `marus25.cortex-debug`
+
+Install the recommended extensions from VS Code's Extensions panel.
+
+### Build from VS Code
+
+Using the Command Palette (`Ctrl + Shift + P`):
+
+1. Run `CMake: Select Configure Preset` and choose **Debug** or **Release**.
+2. Run `CMake: Select Build Preset` and choose the matching preset.
+3. Run `CMake: Configure`.
+4. Run `CMake: Build`.
+
+Use the default/all build target or `stm32_firmware` to build both cores.
+
+The CMake presets remain the source of truth for build configuration. VS Code does not replace the command-line build workflow.
+
+## 4. clangd — Code Intelligence
+
+Crashy uses **clangd** for completion, diagnostics, symbol navigation, and header resolution.
+
+Microsoft's C/C++ IntelliSense engine is disabled in the shared workspace settings to avoid conflicting diagnostics.
+
+### Dual-core compilation databases
+
+CM7 and CM4 use different CPU/FPU flags and preprocessor definitions.
+
+The Debug build generates:
+
+```text
+build/Debug/CM7/compile_commands.json
+build/Debug/CM4/compile_commands.json
+```
+
+The repository-level `.clangd` configuration selects the appropriate compilation database:
+
+- CM7 application and generated core-specific sources → CM7 database.
+- CM4 application and generated core-specific sources → CM4 database.
+- Shared CubeMX sources → CM7 database as the default analysis context.
+
+Shared files may require validation under both cores when they contain core-dependent code.
+
+**Important:** Run the Debug configuration and build before relying on clangd, because the nested compilation databases are generated by the core-specific CMake builds.
+
+```bash
+cmake --preset Debug
+cmake --build --preset Debug
+```
+
+clangd also uses `--query-driver` to discover ARM GCC's target configuration and system-header paths.
+
+### Verify clangd
+
+```bash
+clangd --check=firmware/app/cm7/src/app.c \
+    --query-driver='**/arm-none-eabi-gcc'
+```
+
+```bash
+clangd --check=firmware/app/cm4/src/app.c \
+    --query-driver='**/arm-none-eabi-gcc'
+```
+
+Both application files should parse without unexpected errors.
+
+In VS Code, test Go to Definition and header navigation.
+
+## 5. Code Formatting
+
+Crashy uses a repository-level `.clang-format` to maintain consistent formatting for handwritten C source and header files.
+
+### Format handwritten code
+
+In VS Code, use **Format Document** (`Shift + Alt + F`).
+
+Alternatively, use the command line:
+
+```bash
+clang-format -i firmware/app/cm7/src/app.c
+clang-format -i firmware/app/cm7/inc/cm7/app.h
+```
+
+Use the corresponding paths for other handwritten files.
+
+### Generated-code protection
+
+Do not automatically reformat STM32CubeMX-generated or third-party code.
+
+- `.clang-format` defines the formatting style.
+- `.clang-format-ignore` excludes the CubeMX directory from command-line formatting.
+- `firmware/platform/stm32/cubemx/.clang-format`, when present with `DisableFormat: true`, additionally prevents clangd's formatter from reformatting generated C and header files.
+
+VS Code's automatic Format on Save and Format on Type are disabled for C/C++.
+
+Format handwritten code before submitting changes. Avoid unrelated formatting changes to generated files.
+
+## 6. Debugging Preparation
+
+Crashy plans to use:
+
+```text
+VS Code + Cortex-Debug
+          |
+      GDB Multiarch
+          |
+        OpenOCD
+          |
+        ST-LINK
+          |
+    STM32H755 (SWD)
+```
+
+Separate GDB sessions will use the corresponding CM7 and CM4 ELF files.
+
+### Verified without hardware
+
+- GDB Multiarch can read both Debug ELF files.
+- CM7 and CM4 application symbols are present.
+- OpenOCD 0.12.0 includes STM32H7 dual-core and dual-flash-bank configuration support.
+- Cortex-Debug is installed and available in VS Code.
+
+### Planned OpenOCD configuration
+
+The following is a **proposed configuration**, not yet tested on hardware:
+
+```bash
+openocd \
+    -f interface/stlink-dap.cfg \
+    -c "transport select dapdirect_swd" \
+    -c "set DUAL_CORE 1" \
+    -f target/stm32h7x_dual_bank.cfg
+```
+
+Actual hardware debugging requires a compatible ST-LINK probe, a powered STM32H755 board, and a working SWD connection.
+
+Flash programming, reset synchronization, GDB server ports, and simultaneous dual-core debugging remain unverified.
+
+A shared `.vscode/launch.json` will be added during hardware bring-up once the configuration can be tested.
+
+## 7. Clean / Rebuild
 
 To remove only the Debug build outputs and start fresh:
 
@@ -79,18 +260,54 @@ cmake --preset Debug
 cmake --build --preset Debug
 ```
 
-Use `build/Release` instead to clean Release. Do not delete `firmware/platform/stm32/cubemx/`—that directory contains tracked generated sources and configuration.
+Use `build/Release` instead to clean Release.
 
-## CubeMX configuration
+Do not delete `firmware/platform/stm32/cubemx/`—that directory contains tracked generated sources and configuration.
+
+## 8. CubeMX Configuration
 
 - MCU configuration: `firmware/platform/stm32/cubemx/cubemx.ioc`
 - Generated core projects: `firmware/platform/stm32/cubemx/CM7/` and `CM4/`
 - HAL/CMSIS drivers: `firmware/platform/stm32/cubemx/Drivers/`
 
-Keep custom application and module code **outside** the CubeMX-generated source directories. Use the **repository-root** CMake presets above for normal development; CubeMX's own standalone presets may use a different build output layout.
+Keep custom application and module code **outside** the CubeMX-generated source directories.
 
-## Before opening a pull request
+The per-core `CMakeLists.txt` files are designed to accept user modifications and contain Crashy's application source registration and linker dependencies.
+
+Avoid modifying `mx-generated.cmake`, HAL sources, or generated startup files unnecessarily. Application integration into generated `main.c` files must remain inside CubeMX `USER CODE` regions.
+
+Use the repository-root CMake presets for normal development.
+
+## 9. Troubleshooting
+
+**CMake cannot find the compiler**
+
+Verify that `arm-none-eabi-gcc` is installed and available through `PATH`.
+
+**clangd reports missing STM32 headers**
+
+Configure and build Debug first. Confirm that the per-core `compile_commands.json` files exist, then restart the clangd language server in VS Code.
+
+**clangd uses the wrong core configuration**
+
+Inspect `.clangd` and verify that the source file matches the intended core-specific path rule.
+
+**A core's ELF timestamp did not change**
+
+Ninja uses incremental builds. An unchanged timestamp does not necessarily indicate a failed or skipped build.
+
+**VS Code does not recognize the presets**
+
+Open the repository root rather than an individual firmware subdirectory. Confirm that CMake Tools is installed and select the configure/build presets again.
+
+**Generated files appear in formatting diffs**
+
+Avoid formatting generated files. Check the formatting exclusion and generated-directory configuration before committing.
+
+## 10. Before Opening a Pull Request
 
 1. Confirm Debug and Release builds complete successfully.
-2. Check `git status` to ensure that no build artifacts are staged.
-3. Include relevant firmware and `.ioc` changes in the PR; explain any hardware assumptions that changed.
+2. Format handwritten source and header files.
+3. Run `git diff --check` and inspect `git status`.
+4. Ensure no build artifacts or accidental generated-code formatting changes are staged.
+5. Include relevant firmware and `.ioc` changes in the PR, explaining any changed hardware assumptions.
