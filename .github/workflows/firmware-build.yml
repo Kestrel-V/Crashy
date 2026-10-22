@@ -1,0 +1,66 @@
+name: Firmware CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    name: Firmware Build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ARM GNU Toolchain 14.2.Rel1
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          URL="https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi.tar.xz"
+          ARCHIVE="$RUNNER_TEMP/arm-toolchain.tar.xz"
+          TOOLCHAIN="$RUNNER_TEMP/arm-toolchain"
+
+          curl --fail --location --retry 3 "$URL" -o "$ARCHIVE"
+
+          echo "62a63b981fe391a9cbad7ef51b17e49aeaa3e7b0d029b36ca1e9c3b2a9b78823  $ARCHIVE" | sha256sum -c -
+
+          mkdir -p "$TOOLCHAIN"
+          tar -xf "$ARCHIVE" -C "$TOOLCHAIN" --strip-components=1
+
+          echo "$TOOLCHAIN/bin" >> "$GITHUB_PATH"
+
+      - name: Verify build tools
+        run: |
+          cmake --version
+          ninja --version
+          arm-none-eabi-gcc --version
+          arm-none-eabi-gcc --version | grep -F "14.2.1"
+
+      - name: Build Debug firmware
+        run: |
+          cmake --preset Debug
+          cmake --build --preset Debug
+
+      - name: Build Release firmware
+        run: |
+          cmake --preset Release
+          cmake --build --preset Release
+
+      - name: Verify firmware outputs
+        run: |
+          set -euo pipefail
+
+          for config in Debug Release; do
+            for core in CM7 CM4; do
+              elf="build/${config}/${core}/cubemx_${core}.elf"
+              test -s "$elf"
+              echo "Verified: $elf"
+            done
+          done
