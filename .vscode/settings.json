@@ -1,4 +1,19 @@
 {
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
-    "C_Cpp.default.compilerPath": "/usr/bin/arm-none-eabi-gcc"
+    "C_Cpp.intelliSenseEngine": "disabled",
+
+    "clangd.arguments": [
+        "--query-driver=**/arm-none-eabi-gcc"
+    ],
+
+    "[c]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+        "editor.formatOnSave": false,
+        "editor.formatOnType": false
+    },
+
+    "[cpp]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+        "editor.formatOnSave": false,
+        "editor.formatOnType": false
+    }
 }

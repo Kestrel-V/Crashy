@@ -1,0 +1,21 @@
+# Cortex-M7 source files
+If:
+  PathMatch: 'firmware/(app/cm7|platform/stm32/cubemx/CM7)/.*'
+CompileFlags:
+  CompilationDatabase: build/Debug/CM7
+
+---
+
+# Cortex-M4 source files
+If:
+  PathMatch: 'firmware/(app/cm4|platform/stm32/cubemx/CM4)/.*'
+CompileFlags:
+  CompilationDatabase: build/Debug/CM4
+
+---
+
+# Shared CubeMX sources (analyzed in CM7 context)
+If:
+  PathMatch: 'firmware/platform/stm32/cubemx/(Common|Drivers)/.*'
+CompileFlags:
+  CompilationDatabase: build/Debug/CM7

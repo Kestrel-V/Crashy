@@ -36,6 +36,11 @@ project(${CMAKE_PROJECT_NAME})
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
+# Relink firmware when the active linker script changes
+set_property(TARGET ${CMAKE_PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS 
+    "${CMAKE_CURRENT_SOURCE_DIR}/${STM32_LINKER_SCRIPT}"
+)
+
 # Include mx-generated
 include("mx-generated.cmake")
 
