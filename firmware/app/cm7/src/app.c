@@ -8,7 +8,6 @@ void cm7_app_init(void) {
     s_step_counter = 0;
 }
 
-void cm7_app_step(void) 
-{
+void cm7_app_step(void) {
     s_step_counter++;
 }
