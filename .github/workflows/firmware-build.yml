@@ -15,9 +15,11 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # Checkout repository source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ARM toolchain: restore from cache or download and verify if missing
       - name: Cache ARM GNU Toolchain
         id: arm-cache
         uses: actions/cache@v4
@@ -52,6 +54,29 @@ jobs:
           arm-none-eabi-gcc --version
           arm-none-eabi-gcc --version | grep -F "14.2.1"
 
+      # Code quality: check handwritten C/H formatting, excluding generated code
+      - name: Install clang-format 21.1.8
+        run: |
+          python3 -m venv "$RUNNER_TEMP/clang-format-venv"
+          "$RUNNER_TEMP/clang-format-venv/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --only-binary=:all: \
+            clang-format==21.1.8
+
+          echo "$RUNNER_TEMP/clang-format-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Check handwritten C formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          clang-format --version
+
+          git ls-files -z -- '*.c' '*.h' |
+            grep -zEv '^(firmware/platform/stm32/cubemx/|third_party/)' |
+            xargs -0 -r clang-format --dry-run --Werror
+
+      # Firmware builds: compile both STM32 cores in Debug and Release
       - name: Build Debug firmware
         run: |
           cmake --preset Debug
@@ -62,6 +87,7 @@ jobs:
           cmake --preset Release
           cmake --build --preset Release
 
+      # Output verification: ensure all four ELF files exist and are nonempty
       - name: Verify firmware outputs
         run: |
           set -euo pipefail

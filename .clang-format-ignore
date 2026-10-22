@@ -1,2 +1,5 @@
 # STM32CubeMX-generated code
 firmware/platform/stm32/cubemx/**
+
+# Third-party libraries
+third-party/**
