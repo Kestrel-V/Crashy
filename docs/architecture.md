@@ -1,18 +1,31 @@
-# Crashy - Project Structure (v1.0)
+# Crashy - Project Structure (v1.1)
 
 > Dual-core STM32 FPV drone firmware architecture (Cortex-M7 + Cortex-M4).
 
 ## 1. Overview
 
-This document defines the proposed repository layout, firmware architecture, and directory responsibilities for Crashy.
+This document defines the target repository layout, firmware architecture, and directory responsibilities for Crashy. For build, CI, and tooling instructions see [development-guide.md](development-guide.md).
 
 The firmware is organized into three primary layers:
 
 - **Application:** Core-specific initialization, task creation, and scheduling.
-- **Modules:** Flight-control functionality, sensors, safety, and communication.
+- **Modules:** Flight-control functionality, algorithms, sensors, safety, and communication.
 - **Platform:** Hardware-specific implementation and STM32 integration.
 
-Portable algorithms are kept separately in `lib/`.
+Portable algorithms (controls, estimation, math) live in `modules/` alongside the other modules.
+
+### Current Status
+
+The repository is at the build-system bring-up stage. Sections 2-6 describe the **target** architecture; only the following exists today:
+
+| Area | State |
+|------|-------|
+| `firmware/app/cm7/`, `firmware/app/cm4/` | Implemented: stub `cm7_app_init/step` and `cm4_app_init/step` (no tasks yet) |
+| `firmware/platform/stm32/cubemx/` | Implemented: CubeMX-generated CM7 and CM4 projects (HAL, CMSIS, startup, linker scripts) |
+| Root `CMakeLists.txt` + `CMakePresets.json` | Implemented: Debug/Release presets build both cores as separate ExternalProjects |
+| `.github/workflows/` | Implemented: Firmware Build (clang-format check, Debug + Release builds of both cores) |
+| `docs/` | `architecture.md`, `development-guide.md` |
+| `firmware/modules/`, `firmware/platform/{api,board}`, `firmware/platform/stm32/{src,CMakeLists.txt}`, `cmake/`, `tests/`, `tools/`, `hardware/`, `software/`, `third_party/` | **Planned**, not yet created |
 
 ---
 
@@ -24,7 +37,7 @@ Crashy/
 ├── .github/
 │   └── workflows/             # CI/CD
 ├── .vscode/                   # VS Code configuration
-├── cmake/                     # Build helpers and toolchains
+├── cmake/                     # Build helpers and toolchains (planned)
 │
 ├── firmware/
 │   ├── app/
@@ -43,6 +56,9 @@ Crashy/
 │   │   ├── devices/
 │   │   │   ├── imu/
 │   │   │   └── esc/
+│   │   ├── controls/          # PID controllers and control algorithms
+│   │   ├── estimation/        # State estimation and sensor fusion
+│   │   ├── math/              # Math utilities
 │   │   ├── receiver/          # RC input / CRSF decoding
 │   │   ├── telemetry/         # Telemetry processing
 │   │   ├── configuration/     # Settings management
@@ -62,17 +78,6 @@ Crashy/
 │           │   └── ipc/
 │           └── CMakeLists.txt
 │
-├── lib/
-│   ├── controls/
-│   │   ├── inc/controls/
-│   │   └── src/
-│   ├── estimation/
-│   │   ├── inc/estimation/
-│   │   └── src/
-│   └── math/
-│       ├── inc/math/
-│       └── src/
-│
 ├── hardware/                  # PCB, schematics, BOM
 ├── software/                  # Ground station / PC applications
 ├── tests/                     # Unit and integration tests
@@ -81,6 +86,8 @@ Crashy/
 ├── third_party/               # External dependencies
 │
 ├── .clang-format
+├── .clang-format-ignore       # Excludes CubeMX/third-party code from formatting
+├── .clangd                    # Per-core clangd compilation database selection
 ├── .gitignore
 ├── CMakeLists.txt
 ├── CMakePresets.json
@@ -110,6 +117,9 @@ Contains the functional components of the flight controller.
 |--------|----------------|
 | `flight/` | Flight-loop coordination |
 | `safety/` | Arming, failsafe, and fault handling |
+| `controls/` | PID controllers and other control algorithms |
+| `estimation/` | State estimation and sensor fusion |
+| `math/` | Mathematical utilities and supporting functions |
 | `devices/` | Device-level sensor and actuator drivers |
 | `receiver/` | RC input and CRSF decoding |
 | `telemetry/` | Telemetry collection and processing |
@@ -138,19 +148,7 @@ Isolates hardware-dependent implementations from higher-level firmware.
 
 ---
 
-## 4. Reusable Libraries — `lib/`
-
-Contains portable algorithms that are independent of STM32 hardware.
-
-| Library | Responsibility |
-|---------|----------------|
-| `controls/` | PID controllers and other control algorithms |
-| `estimation/` | State estimation and sensor fusion |
-| `math/` | Mathematical utilities and supporting functions |
-
----
-
-## 5. Repository Directories
+## 4. Repository Directories
 
 | Directory | Responsibility |
 |-----------|----------------|
@@ -166,19 +164,21 @@ Contains portable algorithms that are independent of STM32 hardware.
 
 ---
 
-## 6. Project Configuration Files
+## 5. Project Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `.clang-format` | C/C++ formatting rules |
+| `.clang-format` | C/C++ formatting rules (CI pins clang-format 21.1.8) |
+| `.clang-format-ignore` | Excludes generated and third-party code from formatting |
+| `.clangd` | Selects the CM7 or CM4 compilation database by source path |
 | `.gitignore` | Files excluded from Git |
-| `CMakeLists.txt` | Root CMake build configuration |
-| `CMakePresets.json` | Standardized build presets |
+| `CMakeLists.txt` | Root CMake build; builds CM7 and CM4 as separate ExternalProjects |
+| `CMakePresets.json` | Debug/Release presets, each building both cores |
 | `README.md` | Project introduction and setup instructions |
 
 ---
 
-## 7. Architectural Summary
+## 6. Architectural Summary
 
 - **Dual-core design:** Cortex-M7 and Cortex-M4 have separate application entry points and task ownership.
 - **Modular firmware:** Functionality is divided into self-contained modules with clear interfaces.
@@ -186,4 +186,4 @@ Contains portable algorithms that are independent of STM32 hardware.
 - **Module-owned interfaces:** Each module defines and exposes its own public API.
 - **Module-owned configuration:** Modules own their settings, with central coordination for persistence and initialization.
 - **Communication:** Direct calls are preferred within a core; FreeRTOS communication mechanisms are used where needed.
-- **Reusable libraries:** Controls, estimation, and mathematical algorithms remain independent of the target hardware.
+- **Portable algorithms:** Controls, estimation, and math modules remain independent of the target hardware.
